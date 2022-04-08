@@ -55,3 +55,9 @@ Constellation files are JSON, an example is:
 Most of the attributes are self-explanatory, and simply strings displayed literally in the output.
 `graph` is a list of stars, with their X and Y coordinates, and the character used to draw them, in this
 order.
+
+## Screenshots
+
+| ![starfetch -l](/images/Screenshot_20220408_210043.png) | ![starfetch ursa_major](/images/Screenshot_20220408_210222.png) |
+| --- | --- |
+| Listing constellations | Displaying a constellation |
