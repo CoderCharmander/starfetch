@@ -1,12 +1,12 @@
 use std::{
     ffi::OsStr,
-    fs::File,
+    fs::{self, File},
     io::stdout,
     path::{Path, PathBuf},
 };
 
 use ansi_term::Color;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use clap::{ArgGroup, Parser};
 use rand::prelude::SliceRandom;
 use serde::Deserialize;
@@ -63,22 +63,8 @@ impl Constellation {
     }
 }
 
-const RESOURCE_PATHS: [&str; 3] = ["./share", "/usr/share/starfetch", "/opt/starfetch/share"];
-
-fn get_resource_path() -> Option<PathBuf> {
-    RESOURCE_PATHS.iter().map(PathBuf::from).fold(None, |o, p| {
-        o.or_else(|| {
-            if p.join("constellations").is_dir() {
-                Some(p)
-            } else {
-                None
-            }
-        })
-    })
-}
-
 #[derive(Parser)]
-#[clap(group(ArgGroup::new("action").required(true).args(&["name", "list", "random"])))]
+#[clap(group(ArgGroup::new("action").required(true).args(&["name", "list", "random", "data-directory"])))]
 struct Config {
     /// Set the path where constellations are loaded from
     #[clap(short, long)]
@@ -94,6 +80,10 @@ struct Config {
     /// List all constellations
     #[clap(short, long)]
     list: bool,
+
+    /// Print the directory where constellations will be read from.
+    #[clap(short, long)]
+    data_directory: bool,
 }
 
 fn fetch_constellation(constellations_path: &Path, name: &str) -> Result<Constellation> {
@@ -109,13 +99,13 @@ fn main() -> Result<()> {
 
     let asset_path = config
         .asset_path
-        .or_else(get_resource_path)
-        .context("The constellation folder was not found")?;
+        .or_else(|| Some(dirs::data_dir()?.join("starfetch")))
+        .context("No valid resource directory was found")?;
 
     let constellations_path = asset_path.join("constellations");
 
     if !constellations_path.is_dir() {
-        bail!("An invalid asset folder was provided (missing `constellations/` directory)");
+        fs::create_dir_all(&constellations_path)?;
     }
 
     if let Some(name) = config.name {
@@ -126,19 +116,40 @@ fn main() -> Result<()> {
         for p in constellations_path.read_dir()? {
             let p = p?;
             if p.file_type()?.is_file() && p.path().extension() == Some(OsStr::new("json")) {
-                names.push(p.path().file_stem().context("Yea this should never happen")?.to_string_lossy().to_string());
+                names.push(
+                    p.path()
+                        .file_stem()
+                        .context("Yea this should never happen")?
+                        .to_string_lossy()
+                        .to_string(),
+                );
             }
         }
 
         if config.random {
-            let name: &str = names.choose(&mut rand::thread_rng()).context("Constellations directory is empty")?.as_ref();
+            let name: &str = names
+                .choose(&mut rand::thread_rng())
+                .context("Constellations directory is empty")?
+                .as_ref();
             fetch_constellation(&constellations_path, name)?.render(&mut stdout())?;
         } else if config.list {
             for c in &names {
                 let constellation = fetch_constellation(&constellations_path, c)?;
-                println!("{} - {} ({})", Color::White.bold().paint(c), constellation.name, constellation.quadrant);
+                println!(
+                    "{} - {} ({})",
+                    Color::White.bold().paint(c),
+                    constellation.name,
+                    constellation.quadrant
+                );
             }
         }
+    } else if config.data_directory {
+        println!(
+            "The data directory is {}. Copy constellation files here.",
+            Color::White
+                .bold()
+                .paint(constellations_path.to_string_lossy())
+        )
     }
 
     Ok(())
