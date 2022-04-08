@@ -133,6 +133,7 @@ fn main() -> Result<()> {
                 .as_ref();
             fetch_constellation(&constellations_path, name)?.render(&mut stdout())?;
         } else if config.list {
+            names.sort();
             for c in &names {
                 let constellation = fetch_constellation(&constellations_path, c)?;
                 println!(
